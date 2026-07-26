@@ -136,6 +136,24 @@ a{color:inherit}
   .metrics{grid-template-columns:1fr 1fr}.article-top{grid-template-columns:1fr}
   .abstract-grid{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr 1.4fr auto}
 }
+
+.authbar{
+  display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;
+  margin-bottom:12px;box-shadow:var(--shadow)
+}
+.auth-left{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.auth-left .input{width:280px;max-width:70vw}
+.auth-user{font-size:13px;color:var(--muted)}
+.auth-user strong{color:var(--ink)}
+.peer-reviews{margin-top:10px;padding-top:10px;border-top:1px solid #e1e3dc}
+.peer-review{padding:7px 0;border-bottom:1px solid #e8e9e3;font-size:12px}
+.peer-review:last-child{border-bottom:0}
+.peer-review .reviewer{font-weight:700;color:var(--ink)}
+.peer-review .peer-comment{margin-top:3px;color:#4d554f;white-space:pre-wrap}
+.login-required{font-size:12px;color:var(--muted);padding:4px 0}
+.sync-dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:#86a89d;margin-right:6px}
+
 </style>
 </head>
 <body>
@@ -151,19 +169,31 @@ a{color:inherit}
     </div>
   </header>
 
+  <div class="authbar">
+    <div id="loggedOutBox" class="auth-left">
+      <input id="loginEmail" class="input" type="email" placeholder="你的 Supabase 登录邮箱">
+      <button id="loginBtn" class="btn primary" type="button">发送登录链接</button>
+      <span class="auth-user">只有 Supabase 中已存在的用户可以登录。</span>
+    </div>
+
+    <div id="loggedInBox" class="auth-left" style="display:none">
+      <span class="auth-user"><span class="sync-dot"></span>已登录：<strong id="userEmail"></strong></span>
+      <button id="refreshReviewsBtn" class="btn" type="button">刷新协作标签</button>
+      <button id="signOutBtn" class="btn" type="button">退出登录</button>
+    </div>
+
+    <div id="authMessage" class="auth-user"></div>
+  </div>
+
   <div class="toolbar">
-    <button id="reloadBtn" class="btn primary">重新载入数据</button>
+    <button id="reloadBtn" class="btn primary">重新载入文献库</button>
     <button id="exportBtn" class="btn" disabled>导出当前筛选 CSV</button>
-    <button id="exportReviewsBtn" class="btn">备份人工标签 JSON</button>
-    <label class="btn" style="display:inline-flex;align-items:center;gap:8px">
-      导入人工标签
-      <input id="importReviewsInput" type="file" accept=".json,application/json" hidden>
-    </label>
+    <button id="exportReviewsBtn" class="btn" disabled>备份协作标签 JSON</button>
   </div>
 
   <div id="status" class="status">正在从 GitHub Pages 读取 DeepSeek 筛选结果…</div>
   <div class="notice">
-    当前版本的“核心收藏 / 收藏 / 无关 / comment”只保存在本浏览器 localStorage 中。下一步接入 Supabase 后会改成你和协作者共享。
+    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。每个人有自己独立的判断，同时可以看到协作者的判断。登录后约每 30 秒自动同步一次。
   </div>
 
   <div class="layout">
@@ -210,7 +240,7 @@ a{color:inherit}
         </div>
 
         <div class="field">
-          <label for="manualFilter">人工标签</label>
+          <label for="manualFilter">我的人工标签</label>
           <select id="manualFilter" class="select">
             <option value="">全部</option>
             <option value="unreviewed">未标注</option>
@@ -261,12 +291,12 @@ a{color:inherit}
         <div class="metric">
           <div class="label">Reviewed</div>
           <div id="metricReviewed" class="value">0</div>
-          <div class="note">已人工判断</div>
+          <div class="note">我已人工判断</div>
         </div>
         <div class="metric">
           <div class="label">Core collection</div>
           <div id="metricCore" class="value">0</div>
-          <div class="note">核心收藏</div>
+          <div class="note">我的核心收藏</div>
         </div>
       </section>
 
@@ -333,16 +363,26 @@ a{color:inherit}
       </div>
 
       <div class="footer-note">
-        文献元数据来自 DeepSeek 打标后的 relevant_literature.json。人工复核目前只存在当前浏览器。
+        文献元数据来自 DeepSeek 打标后的 relevant_literature.json；人工复核保存在 Supabase。
       </div>
     </main>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const DATA_URL = './data/relevant_literature.json';
-const REVIEW_STORAGE_KEY = 'hardwareant_manual_reviews_v1';
+const SUPABASE_URL = 'https://yitfndoqzmyzclgbdaci.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_vqblm23lVGMs6Z1AoQvwVw_0SrNf9o0';
+
 const $ = id => document.getElementById(id);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 const OBJECTS = {
   consumer_electronics:'消费电子',
@@ -391,9 +431,16 @@ const REVIEW_RANK = {core:0,favorite:1,'':2,irrelevant:3};
 
 let works = [];
 let filtered = [];
-let reviews = loadReviews();
 let page = 1;
-let saveTimer = null;
+
+let currentUser = null;
+let allReviews = [];
+let myReviews = {};
+let reviewsByWork = {};
+
+let saveTimers = new Map();
+let syncTimer = null;
+let isLoadingReviews = false;
 
 function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, ch => ({
@@ -415,7 +462,7 @@ function nowISO(){
 
 function authorNames(w){
   if(Array.isArray(w.author_names) && w.author_names.length) return w.author_names;
-  if(Array.isArray(w.authors)) {
+  if(Array.isArray(w.authors)){
     return w.authors.map(a => typeof a === 'string' ? a : a?.name).filter(Boolean);
   }
   return [];
@@ -423,7 +470,7 @@ function authorNames(w){
 
 function keywordNames(w){
   if(Array.isArray(w.keyword_names) && w.keyword_names.length) return w.keyword_names;
-  if(Array.isArray(w.keywords)) {
+  if(Array.isArray(w.keywords)){
     return w.keywords.map(k => typeof k === 'string' ? k : k?.name).filter(Boolean);
   }
   return [];
@@ -433,27 +480,272 @@ function bestUrl(w){
   return w.best_url || w.landing_page_url || w.doi_url || w.openalex_url || '';
 }
 
-function loadReviews(){
-  try{
-    const raw = localStorage.getItem(REVIEW_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  }catch{
-    return {};
-  }
-}
-
-function persistReviews(){
-  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviews));
-}
-
 function reviewOf(w){
-  return reviews[String(w.openalex_id)] || {label:'',comment:''};
+  return myReviews[String(w.openalex_id)] || {label:'',comment:''};
+}
+
+function reviewsForWork(id){
+  return reviewsByWork[String(id)] || [];
 }
 
 function setStatus(text, kind=''){
   const el = $('status');
   el.textContent = text;
   el.className = 'status' + (kind ? ' '+kind : '');
+}
+
+function setAuthMessage(text){
+  $('authMessage').textContent = text || '';
+}
+
+function renderAuth(){
+  const loggedIn = Boolean(currentUser);
+
+  $('loggedOutBox').style.display = loggedIn ? 'none' : 'flex';
+  $('loggedInBox').style.display = loggedIn ? 'flex' : 'none';
+  $('exportReviewsBtn').disabled = !loggedIn;
+
+  if(loggedIn){
+    $('userEmail').textContent = currentUser.email || currentUser.id;
+  }
+}
+
+async function sendMagicLink(){
+  const email = $('loginEmail').value.trim();
+
+  if(!email){
+    setAuthMessage('先输入邮箱。');
+    return;
+  }
+
+  $('loginBtn').disabled = true;
+  setAuthMessage('正在发送登录邮件…');
+
+  try{
+    const redirectTo = window.location.origin + window.location.pathname;
+
+    const {error} = await db.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: redirectTo,
+        shouldCreateUser: false
+      }
+    });
+
+    if(error) throw error;
+
+    setAuthMessage('登录邮件已发送。去邮箱点链接，再回到这个网页。');
+  }catch(e){
+    setAuthMessage('发送失败：' + e.message);
+  }finally{
+    $('loginBtn').disabled = false;
+  }
+}
+
+async function signOut(){
+  const {error} = await db.auth.signOut();
+  if(error){
+    setAuthMessage('退出失败：' + error.message);
+  }
+}
+
+async function handleSession(session){
+  const oldUserId = currentUser?.id || null;
+  currentUser = session?.user || null;
+  renderAuth();
+
+  if(currentUser){
+    setAuthMessage('正在同步协作标签…');
+    await loadSharedReviews();
+    setAuthMessage('协作标签已同步。');
+    startAutoSync();
+  }else{
+    stopAutoSync();
+    allReviews = [];
+    myReviews = {};
+    reviewsByWork = {};
+    setAuthMessage('未登录时可以浏览文献，但不能编辑人工标签。');
+    if(oldUserId) applyFilters();
+    else renderAll();
+  }
+}
+
+async function initAuth(){
+  try{
+    const {data, error} = await db.auth.getSession();
+    if(error) throw error;
+    await handleSession(data.session);
+
+    db.auth.onAuthStateChange((_event, session)=>{
+      setTimeout(()=>handleSession(session), 0);
+    });
+  }catch(e){
+    setAuthMessage('Supabase 登录初始化失败：' + e.message);
+  }
+}
+
+function rebuildReviewIndexes(){
+  myReviews = {};
+  reviewsByWork = {};
+
+  for(const row of allReviews){
+    const id = String(row.openalex_id);
+
+    if(!reviewsByWork[id]) reviewsByWork[id] = [];
+    reviewsByWork[id].push(row);
+
+    if(currentUser && row.user_id === currentUser.id){
+      myReviews[id] = row;
+    }
+  }
+
+  for(const rows of Object.values(reviewsByWork)){
+    rows.sort((a,b)=>String(b.updated_at||'').localeCompare(String(a.updated_at||'')));
+  }
+}
+
+async function loadSharedReviews(silent=false){
+  if(!currentUser || isLoadingReviews) return;
+
+  const active = document.activeElement;
+  if(
+    silent &&
+    active &&
+    (active.classList.contains('review-comment') || active.classList.contains('review-label'))
+  ){
+    return;
+  }
+
+  isLoadingReviews = true;
+
+  try{
+    const batchSize = 1000;
+    let from = 0;
+    const rows = [];
+
+    while(true){
+      const {data, error} = await db
+        .from('literature_reviews')
+        .select('openalex_id,user_id,reviewer_email,label,comment,updated_at')
+        .order('updated_at', {ascending:true})
+        .range(from, from + batchSize - 1);
+
+      if(error) throw error;
+
+      rows.push(...(data || []));
+
+      if(!data || data.length < batchSize) break;
+      from += batchSize;
+    }
+
+    allReviews = rows;
+    rebuildReviewIndexes();
+    applyFilters();
+
+    if(!silent){
+      setAuthMessage(`已同步 ${fmt(allReviews.length)} 条协作人工记录。`);
+    }
+  }catch(e){
+    setAuthMessage(
+      '协作标签读取失败：' + e.message +
+      '。如果这是第一次连接，请检查 literature_reviews 表和 RLS SQL 是否已经创建。'
+    );
+  }finally{
+    isLoadingReviews = false;
+  }
+}
+
+function startAutoSync(){
+  stopAutoSync();
+  syncTimer = setInterval(()=>loadSharedReviews(true), 30000);
+}
+
+function stopAutoSync(){
+  if(syncTimer){
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
+}
+
+async function saveReview(id){
+  if(!currentUser) return;
+
+  const rv = myReviews[id] || {label:'',comment:''};
+  const state = document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
+
+  if(state) state.textContent = '正在同步 Supabase…';
+
+  try{
+    const label = rv.label || '';
+    const comment = String(rv.comment || '');
+
+    if(!label && !comment.trim()){
+      const {error} = await db
+        .from('literature_reviews')
+        .delete()
+        .eq('openalex_id', id)
+        .eq('user_id', currentUser.id);
+
+      if(error) throw error;
+
+      allReviews = allReviews.filter(
+        r => !(String(r.openalex_id) === id && r.user_id === currentUser.id)
+      );
+      delete myReviews[id];
+    }else{
+      const payload = {
+        openalex_id: id,
+        user_id: currentUser.id,
+        reviewer_email: currentUser.email,
+        label,
+        comment,
+        updated_at: nowISO()
+      };
+
+      const {data, error} = await db
+        .from('literature_reviews')
+        .upsert(payload, {onConflict:'openalex_id,user_id'})
+        .select()
+        .single();
+
+      if(error) throw error;
+
+      myReviews[id] = data;
+
+      const ix = allReviews.findIndex(
+        r => String(r.openalex_id) === id && r.user_id === currentUser.id
+      );
+
+      if(ix >= 0) allReviews[ix] = data;
+      else allReviews.push(data);
+    }
+
+    rebuildReviewIndexes();
+
+    if(state){
+      state.textContent = '已同步 · ' + new Date().toLocaleTimeString();
+    }
+
+    renderDashboard();
+  }catch(e){
+    if(state) state.textContent = '保存失败：' + e.message;
+  }
+}
+
+function scheduleSave(id){
+  if(saveTimers.has(id)){
+    clearTimeout(saveTimers.get(id));
+  }
+
+  const state = document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
+  if(state) state.textContent = '等待保存…';
+
+  const timer = setTimeout(()=>{
+    saveReview(id);
+    saveTimers.delete(id);
+  }, 700);
+
+  saveTimers.set(id, timer);
 }
 
 async function loadData(){
@@ -464,11 +756,13 @@ async function loadData(){
 
   try{
     const res = await fetch(DATA_URL, {cache:'no-store'});
+
     if(!res.ok){
       throw new Error(`HTTP ${res.status}：找不到 ${DATA_URL}`);
     }
 
     const parsed = await res.json();
+
     if(!Array.isArray(parsed)){
       throw new Error('relevant_literature.json 不是数组格式。');
     }
@@ -481,20 +775,27 @@ async function loadData(){
     $('sourceState').textContent = `已载入 ${fmt(works.length)} 篇候选文献`;
     $('reloadBtn').disabled = false;
     $('exportBtn').disabled = false;
+
     setStatus(`已载入 ${fmt(works.length)} 篇 DeepSeek high + medium 候选文献。`);
   }catch(e){
     $('sourceState').textContent = '文献库载入失败';
     $('reloadBtn').disabled = false;
+
     setStatus(
       '载入失败：' + e.message +
       '。请确认 GitHub 仓库中存在 data/relevant_literature.json，并已 push。',
       'error'
     );
+
     $('articleList').innerHTML = '<div class="empty">无法读取文献库</div>';
   }
 }
 
 function setupDynamicFilters(){
+  const journalValue = $('journalFilter').value;
+  const typeValue = $('typeFilter').value;
+  const langValue = $('languageFilter').value;
+
   const journals = [...new Set(works.map(w=>w.journal_name).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b));
 
@@ -516,12 +817,19 @@ function setupDynamicFilters(){
     '<option value="">全部语言</option>' +
     langs.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
 
+  if(journals.includes(journalValue)) $('journalFilter').value = journalValue;
+  if(types.includes(typeValue)) $('typeFilter').value = typeValue;
+  if(langs.includes(langValue)) $('languageFilter').value = langValue;
+
   const years = works.map(w=>Number(w.publication_year)).filter(Number.isFinite);
   const minY = years.length ? Math.min(...years) : 2000;
   const maxY = years.length ? Math.max(...years) : new Date().getFullYear();
 
-  $('yearFrom').value = minY;
-  $('yearTo').value = maxY;
+  if(!$('yearFrom').dataset.default){
+    $('yearFrom').value = minY;
+    $('yearTo').value = maxY;
+  }
+
   $('yearFrom').dataset.default = minY;
   $('yearTo').dataset.default = maxY;
 
@@ -562,6 +870,12 @@ function selected(attr){
 }
 
 function applyFilters(){
+  if(!works.length){
+    filtered = [];
+    renderAll();
+    return;
+  }
+
   const relevance = $('relevanceFilter').value;
   const journal = $('journalFilter').value;
   const from = Number($('yearFrom').value) || -Infinity;
@@ -602,6 +916,7 @@ function applyFilters(){
     for(const [k,v] of Object.entries(flagRules)){
       if(Boolean(w[k]) !== v) return false;
     }
+
     return true;
   });
 
@@ -616,19 +931,25 @@ function sortFiltered(){
     if(sort === 'newest'){
       return String(b.publication_date||'').localeCompare(String(a.publication_date||''));
     }
+
     if(sort === 'oldest'){
       return String(a.publication_date||'').localeCompare(String(b.publication_date||''));
     }
+
     if(sort === 'cited'){
       return (Number(b.cited_by_count)||0)-(Number(a.cited_by_count)||0);
     }
+
     if(sort === 'review'){
       const ra = REVIEW_RANK[reviewOf(a).label || ''] ?? 9;
       const rb = REVIEW_RANK[reviewOf(b).label || ''] ?? 9;
-      return ra-rb || String(b.publication_date||'').localeCompare(String(a.publication_date||''));
+
+      return ra-rb ||
+        String(b.publication_date||'').localeCompare(String(a.publication_date||''));
     }
 
     const score = {high:0,medium:1,low:2};
+
     return (score[a.relevance_score]??9)-(score[b.relevance_score]??9)
       || String(b.publication_date||'').localeCompare(String(a.publication_date||''));
   });
@@ -639,6 +960,7 @@ function countBy(items, getter){
 
   items.forEach(w=>{
     const vals = getter(w);
+
     (Array.isArray(vals)?vals:[vals])
       .filter(Boolean)
       .forEach(v=>m.set(v,(m.get(v)||0)+1));
@@ -688,7 +1010,6 @@ function renderYearChart(){
     : pad.l+i*(W-pad.l-pad.r)/(rows.length-1);
 
   const y = n => H-pad.b - n*(H-pad.t-pad.b)/max;
-
   const pts = rows.map(([,n],i)=>`${x(i)},${y(n)}`).join(' ');
   const yTicks=[0,.25,.5,.75,1].map(t=>Math.round(max*t));
   const step=Math.max(1,Math.ceil(rows.length/8));
@@ -766,15 +1087,54 @@ function labelPills(w){
   });
 
   const rv=reviewOf(w);
+
   if(rv.label){
-    parts.push(`<span class="pill manual">${esc(MANUAL[rv.label]||rv.label)}</span>`);
+    parts.push(`<span class="pill manual">我的：${esc(MANUAL[rv.label]||rv.label)}</span>`);
+  }
+
+  const others = reviewsForWork(w.openalex_id)
+    .filter(r=>!currentUser || r.user_id !== currentUser.id);
+
+  for(const r of others){
+    if(r.label){
+      parts.push(
+        `<span class="pill manual">${esc(r.reviewer_email||'Collaborator')}：${esc(MANUAL[r.label]||r.label)}</span>`
+      );
+    }
   }
 
   return parts.join('');
 }
 
+function peerReviewsHTML(id){
+  const rows = reviewsForWork(id)
+    .filter(r=>!currentUser || r.user_id !== currentUser.id);
+
+  if(!rows.length){
+    return '<div class="peer-reviews"><div class="login-required">暂无协作者标注</div></div>';
+  }
+
+  return `
+    <div class="peer-reviews">
+      <div class="field-title">协作者判断</div>
+      ${rows.map(r=>`
+        <div class="peer-review">
+          <div>
+            <span class="reviewer">${esc(r.reviewer_email||'Collaborator')}</span>
+            ${r.label ? ` · ${esc(MANUAL[r.label]||r.label)}` : ''}
+          </div>
+          ${r.comment ? `<div class="peer-comment">${esc(r.comment)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function rawRecord(w){
-  return JSON.stringify({...w,manual_review:reviewOf(w)},null,2);
+  return JSON.stringify({
+    ...w,
+    collaborative_reviews: reviewsForWork(w.openalex_id)
+  },null,2);
 }
 
 function renderArticles(){
@@ -809,6 +1169,35 @@ function renderArticles(){
     const authors=authorNames(w).join('; ')||'Unknown author';
     const kws=keywordNames(w);
     const kwsZh=Array.isArray(w.keywords_zh)?w.keywords_zh:[];
+
+    const editBox = currentUser
+      ? `
+        <div class="field-title">我的人工标签</div>
+
+        <select class="select review-label" data-id="${esc(id)}">
+          <option value="" ${!rv.label?'selected':''}>未标注</option>
+          <option value="core" ${rv.label==='core'?'selected':''}>核心收藏</option>
+          <option value="favorite" ${rv.label==='favorite'?'selected':''}>收藏</option>
+          <option value="irrelevant" ${rv.label==='irrelevant'?'selected':''}>无关</option>
+        </select>
+
+        <div class="field" style="margin-top:8px">
+          <label>我的 Comment</label>
+          <textarea
+            class="textarea review-comment"
+            data-id="${esc(id)}"
+            placeholder="为什么值得读、与哪个论题相关、后续怎么用……"
+          >${esc(rv.comment||'')}</textarea>
+        </div>
+
+        <div class="save-state" data-save-id="${esc(id)}">
+          ${rv.updated_at
+            ? '上次同步：'+esc(new Date(rv.updated_at).toLocaleString())
+            : ''
+          }
+        </div>
+      `
+      : `<div class="login-required">登录后才能添加自己的标签和 comment。</div>`;
 
     return `
       <article class="article ${esc(rv.label||'')}" data-id="${esc(id)}">
@@ -846,30 +1235,8 @@ function renderArticles(){
           </div>
 
           <div class="review-box">
-            <div class="field-title">人工标签</div>
-
-            <select class="select review-label" data-id="${esc(id)}">
-              <option value="" ${!rv.label?'selected':''}>未标注</option>
-              <option value="core" ${rv.label==='core'?'selected':''}>核心收藏</option>
-              <option value="favorite" ${rv.label==='favorite'?'selected':''}>收藏</option>
-              <option value="irrelevant" ${rv.label==='irrelevant'?'selected':''}>无关</option>
-            </select>
-
-            <div class="field" style="margin-top:8px">
-              <label>Comment</label>
-              <textarea
-                class="textarea review-comment"
-                data-id="${esc(id)}"
-                placeholder="写下为什么值得读、与哪个论题相关、后续怎么用……"
-              >${esc(rv.comment||'')}</textarea>
-            </div>
-
-            <div class="save-state" data-save-id="${esc(id)}">
-              ${rv.updated_at
-                ? '本地保存：'+esc(new Date(rv.updated_at).toLocaleString())
-                : ''
-              }
-            </div>
+            ${editBox}
+            ${peerReviewsHTML(id)}
           </div>
         </div>
 
@@ -910,11 +1277,28 @@ function renderArticles(){
   document.querySelectorAll('.review-label').forEach(el=>{
     el.addEventListener('change',e=>{
       const id=e.target.dataset.id;
-      updateReview(id,{label:e.target.value});
+
+      const current = myReviews[id] || {
+        openalex_id:id,
+        user_id:currentUser.id,
+        reviewer_email:currentUser.email,
+        label:'',
+        comment:'',
+        updated_at:null
+      };
+
+      myReviews[id] = {
+        ...current,
+        label:e.target.value,
+        updated_at:nowISO()
+      };
 
       const article=e.target.closest('.article');
       article.classList.remove('core','favorite','irrelevant');
-      if(e.target.value) article.classList.add(e.target.value);
+
+      if(e.target.value){
+        article.classList.add(e.target.value);
+      }
 
       scheduleSave(id);
       renderDashboard();
@@ -928,44 +1312,36 @@ function renderArticles(){
   document.querySelectorAll('.review-comment').forEach(el=>{
     el.addEventListener('input',e=>{
       const id=e.target.dataset.id;
-      updateReview(id,{comment:e.target.value});
+
+      const current = myReviews[id] || {
+        openalex_id:id,
+        user_id:currentUser.id,
+        reviewer_email:currentUser.email,
+        label:'',
+        comment:'',
+        updated_at:null
+      };
+
+      myReviews[id] = {
+        ...current,
+        comment:e.target.value,
+        updated_at:nowISO()
+      };
+
       scheduleSave(id);
     });
 
-    el.addEventListener('blur',()=>{
-      persistReviews();
+    el.addEventListener('blur',e=>{
+      const id=e.target.dataset.id;
+
+      if(saveTimers.has(id)){
+        clearTimeout(saveTimers.get(id));
+        saveTimers.delete(id);
+      }
+
+      saveReview(id);
     });
   });
-}
-
-function updateReview(id, patch){
-  const current=reviews[id]||{label:'',comment:''};
-
-  reviews[id]={
-    ...current,
-    ...patch,
-    updated_at:nowISO()
-  };
-
-  if(!reviews[id].label && !String(reviews[id].comment||'').trim()){
-    delete reviews[id];
-  }
-}
-
-function scheduleSave(id){
-  clearTimeout(saveTimer);
-
-  const state=document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
-  if(state) state.textContent='保存中…';
-
-  saveTimer=setTimeout(()=>{
-    persistReviews();
-
-    const target=document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
-    if(target){
-      target.textContent='已保存到本浏览器 · '+new Date().toLocaleTimeString();
-    }
-  },500);
 }
 
 function renderAll(){
@@ -995,6 +1371,7 @@ function resetFilters(){
 
 function csvCell(v){
   const s=String(v??'');
+
   return /[",\n]/.test(s)
     ? '"'+s.replace(/"/g,'""')+'"'
     : s;
@@ -1004,11 +1381,13 @@ function downloadBlob(text, filename, mime){
   const blob=new Blob([text],{type:mime});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
+
   a.href=url;
   a.download=filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
+
   URL.revokeObjectURL(url);
 }
 
@@ -1016,7 +1395,8 @@ function exportCSV(){
   if(!filtered.length) return;
 
   const header=[
-    'manual_label','manual_comment','openalex_id','best_url','doi','title','title_zh',
+    'my_label','my_comment','all_collaborative_reviews',
+    'openalex_id','best_url','doi','title','title_zh',
     'authors','journal_name','journal_quartile','journal_jif','publication_date',
     'publication_year','type','language','cited_by_count','keywords','keywords_zh',
     'abstract','abstract_zh','relevance_score',
@@ -1033,6 +1413,7 @@ function exportCSV(){
     rows.push([
       MANUAL[rv.label]||'',
       rv.comment||'',
+      JSON.stringify(reviewsForWork(w.openalex_id)),
       w.openalex_id,
       bestUrl(w),
       w.doi,
@@ -1070,45 +1451,22 @@ function exportCSV(){
 }
 
 function exportReviews(){
+  if(!currentUser) return;
+
   const payload={
     version:1,
     exported_at:nowISO(),
-    source:'HardwareAnt GitHub Pages',
-    labels:MANUAL,
-    reviews
+    source:'HardwareAnt Supabase collaboration',
+    reviews:allReviews
   };
 
   const stamp=new Date().toISOString().slice(0,10);
 
   downloadBlob(
     JSON.stringify(payload,null,2),
-    `hardwareant_manual_reviews_${stamp}.json`,
+    `hardwareant_collaborative_reviews_${stamp}.json`,
     'application/json;charset=utf-8'
   );
-}
-
-async function importReviews(file){
-  try{
-    const text=await file.text();
-    const parsed=JSON.parse(text);
-    const incoming=parsed?.reviews && typeof parsed.reviews==='object'
-      ? parsed.reviews
-      : parsed;
-
-    if(!incoming || typeof incoming!=='object' || Array.isArray(incoming)){
-      throw new Error('JSON 格式不正确');
-    }
-
-    reviews={...reviews,...incoming};
-    persistReviews();
-    page=1;
-    applyFilters();
-    setStatus(`已导入人工标签，共有 ${fmt(Object.keys(reviews).length)} 条本地人工记录。`);
-  }catch(e){
-    setStatus('人工标签导入失败：'+e.message,'error');
-  }finally{
-    $('importReviewsInput').value='';
-  }
 }
 
 [
@@ -1135,10 +1493,12 @@ $('pageSize').addEventListener('change',()=>{
 $('reloadBtn').addEventListener('click',loadData);
 $('exportBtn').addEventListener('click',exportCSV);
 $('exportReviewsBtn').addEventListener('click',exportReviews);
+$('refreshReviewsBtn').addEventListener('click',()=>loadSharedReviews(false));
+$('loginBtn').addEventListener('click',sendMagicLink);
+$('signOutBtn').addEventListener('click',signOut);
 
-$('importReviewsInput').addEventListener('change',e=>{
-  const file=e.target.files?.[0];
-  if(file) importReviews(file);
+$('loginEmail').addEventListener('keydown',e=>{
+  if(e.key === 'Enter') sendMagicLink();
 });
 
 $('resetBtn').addEventListener('click',resetFilters);
@@ -1147,6 +1507,7 @@ $('prevBtn').addEventListener('click',()=>{
   if(page>1){
     page--;
     renderArticles();
+
     window.scrollTo({
       top:$('articleList').offsetTop-20,
       behavior:'smooth'
@@ -1161,6 +1522,7 @@ $('nextBtn').addEventListener('click',()=>{
   if(page<pages){
     page++;
     renderArticles();
+
     window.scrollTo({
       top:$('articleList').offsetTop-20,
       behavior:'smooth'
@@ -1168,7 +1530,8 @@ $('nextBtn').addEventListener('click',()=>{
   }
 });
 
-loadData();
+renderAuth();
+Promise.all([loadData(), initAuth()]);
 </script>
 </body>
 </html>
