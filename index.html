@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HardwareAnt · AnthroTrends</title>
+<title>HardwareAnt · AnthroTrends Collaborative Review</title>
 <style>
 :root{
   --bg:#f4f3ee;--panel:#ffffff;--ink:#171a17;--muted:#697069;--line:#d7d9d1;
@@ -48,7 +48,7 @@ a{color:inherit}
   font-size:12px;color:var(--muted);padding:0 2px 16px
 }
 .layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
-.sidebar{position:sticky;top:16px;display:grid;gap:12px}
+.sidebar{position:sticky;top:16px;display:grid;gap:12px;max-height:calc(100vh - 32px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:4px}
 .panel,.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
 .panel{padding:15px}
 .panel h2{font-size:16px;margin:0}
@@ -127,7 +127,7 @@ a{color:inherit}
 .empty{padding:42px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:16px}
 .footer-note{color:var(--muted);font-size:12px;margin:14px 2px 4px}
 @media(max-width:1100px){
-  .layout{grid-template-columns:1fr}.sidebar{position:static}
+  .layout{grid-template-columns:1fr}.sidebar{position:static;max-height:none;overflow:visible;padding-right:0}
   .metrics{grid-template-columns:repeat(2,1fr)}
   .span-6{grid-column:span 12}
 }
@@ -173,12 +173,16 @@ a{color:inherit}
     <div id="loggedOutBox" class="auth-left">
       <input id="loginEmail" class="input" type="email" placeholder="你的 Supabase 登录邮箱">
       <button id="loginBtn" class="btn primary" type="button">发送登录链接</button>
+      <button id="checkAuthBtn" class="btn" type="button">检查登录状态</button>
       <span class="auth-user">只有 Supabase 中已存在的用户可以登录。</span>
     </div>
 
     <div id="loggedInBox" class="auth-left" style="display:none">
       <span class="auth-user"><span class="sync-dot"></span>已登录：<strong id="userEmail"></strong></span>
       <button id="refreshReviewsBtn" class="btn" type="button">刷新协作标签</button>
+      <button id="migrateLocalBtn" class="btn" type="button">迁移旧浏览器标注</button>
+      <button id="importLegacyBtn" class="btn" type="button">导入旧标注 JSON</button>
+      <input id="importLegacyInput" type="file" accept=".json,application/json" hidden>
       <button id="signOutBtn" class="btn" type="button">退出登录</button>
     </div>
 
@@ -193,7 +197,7 @@ a{color:inherit}
 
   <div id="status" class="status">正在从 GitHub Pages 读取 DeepSeek 筛选结果…</div>
   <div class="notice">
-    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。每个人有自己独立的判断，同时可以看到协作者的判断。登录后约每 30 秒自动同步一次。
+    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。每个人有自己独立的判断，同时可以看到协作者的判断。登录后约每 30 秒自动同步一次。旧版 localStorage 或 manual_reviews.json 可以一键迁移。
   </div>
 
   <div class="layout">
@@ -372,6 +376,8 @@ a{color:inherit}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const DATA_URL = './data/relevant_literature.json';
+const APP_URL = 'https://zhongyao-16.github.io/HardwareAnt/';
+const OLD_REVIEW_STORAGE_KEY = 'hardwareant_manual_reviews_v1';
 const SUPABASE_URL = 'https://yitfndoqzmyzclgbdaci.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_vqblm23lVGMs6Z1AoQvwVw_0SrNf9o0';
 
@@ -522,19 +528,17 @@ async function sendMagicLink(){
   setAuthMessage('正在发送登录邮件…');
 
   try{
-    const redirectTo = window.location.origin + window.location.pathname;
-
     const {error} = await db.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: redirectTo,
+        emailRedirectTo: APP_URL,
         shouldCreateUser: false
       }
     });
 
     if(error) throw error;
 
-    setAuthMessage('登录邮件已发送。去邮箱点链接，再回到这个网页。');
+    setAuthMessage('登录邮件已发送。点邮件里的链接后，新页面应直接显示“已登录”；原标签页重新获得焦点时也会自动检查登录状态。');
   }catch(e){
     setAuthMessage('发送失败：' + e.message);
   }finally{
@@ -549,39 +553,95 @@ async function signOut(){
   }
 }
 
-async function handleSession(session){
+function authCallbackError(){
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return query.get('error_description') || hash.get('error_description') ||
+         query.get('error') || hash.get('error') || '';
+}
+
+function cleanAuthUrl(){
+  const query = new URLSearchParams(window.location.search);
+  const hasAuthQuery = query.has('code') || query.has('error') || query.has('error_description');
+  const hasAuthHash = /access_token=|refresh_token=|error=|error_description=/.test(window.location.hash);
+
+  if(hasAuthQuery || hasAuthHash){
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+async function handleSession(session, event=''){
   const oldUserId = currentUser?.id || null;
-  currentUser = session?.user || null;
+  const newUser = session?.user || null;
+  const newUserId = newUser?.id || null;
+
+  currentUser = newUser;
   renderAuth();
 
   if(currentUser){
-    setAuthMessage('正在同步协作标签…');
-    await loadSharedReviews();
-    setAuthMessage('协作标签已同步。');
+    cleanAuthUrl();
+
+    if(oldUserId !== newUserId || !allReviews.length){
+      setAuthMessage('登录成功，正在同步协作标签…');
+      await loadSharedReviews();
+    }else if(event === 'FOCUS_CHECK' || event === 'VISIBILITY_CHECK'){
+      await loadSharedReviews(true);
+    }
+
+    setAuthMessage(`已登录：${currentUser.email || currentUser.id}`);
     startAutoSync();
   }else{
     stopAutoSync();
     allReviews = [];
     myReviews = {};
     reviewsByWork = {};
-    setAuthMessage('未登录时可以浏览文献，但不能编辑人工标签。');
+
+    const callbackError = authCallbackError();
+    if(callbackError){
+      setAuthMessage('登录回调失败：' + callbackError);
+    }else{
+      setAuthMessage('未登录时可以浏览文献，但不能编辑人工标签。');
+    }
+
     if(oldUserId) applyFilters();
     else renderAll();
   }
 }
 
-async function initAuth(){
+async function checkAuthStatus(event='MANUAL_CHECK'){
   try{
     const {data, error} = await db.auth.getSession();
     if(error) throw error;
-    await handleSession(data.session);
 
-    db.auth.onAuthStateChange((_event, session)=>{
-      setTimeout(()=>handleSession(session), 0);
-    });
+    if(data.session){
+      await handleSession(data.session, event);
+    }else{
+      currentUser = null;
+      renderAuth();
+
+      const callbackError = authCallbackError();
+      setAuthMessage(
+        callbackError
+          ? '登录回调失败：' + callbackError
+          : '当前浏览器里没有 Supabase 登录 session。'
+      );
+    }
   }catch(e){
-    setAuthMessage('Supabase 登录初始化失败：' + e.message);
+    setAuthMessage('检查登录状态失败：' + e.message);
   }
+}
+
+function initAuth(){
+  const callbackError = authCallbackError();
+  if(callbackError){
+    setAuthMessage('登录回调返回错误：' + callbackError);
+  }
+
+  db.auth.onAuthStateChange((event, session)=>{
+    setTimeout(()=>handleSession(session, event), 0);
+  });
+
+  setTimeout(()=>checkAuthStatus('INITIAL_CHECK'), 100);
 }
 
 function rebuildReviewIndexes(){
@@ -746,6 +806,123 @@ function scheduleSave(id){
   }, 700);
 
   saveTimers.set(id, timer);
+}
+
+
+function normalizeLegacyReviews(input){
+  const source =
+    input && typeof input === 'object' && !Array.isArray(input) && input.reviews
+      ? input.reviews
+      : input;
+
+  const rows = [];
+
+  if(Array.isArray(source)){
+    for(const item of source){
+      if(!item || typeof item !== 'object') continue;
+      const id = item.openalex_id || item.id;
+      if(!id) continue;
+
+      rows.push({
+        openalex_id:String(id),
+        label:String(item.label || ''),
+        comment:String(item.comment || ''),
+        updated_at:item.updated_at || nowISO()
+      });
+    }
+  }else if(source && typeof source === 'object'){
+    for(const [id, item] of Object.entries(source)){
+      if(!item || typeof item !== 'object') continue;
+
+      rows.push({
+        openalex_id:String(item.openalex_id || id),
+        label:String(item.label || ''),
+        comment:String(item.comment || ''),
+        updated_at:item.updated_at || nowISO()
+      });
+    }
+  }
+
+  const allowed = new Set(['', 'core', 'favorite', 'irrelevant']);
+
+  return rows
+    .map(r=>({
+      ...r,
+      label:allowed.has(r.label) ? r.label : ''
+    }))
+    .filter(r=>r.openalex_id && (r.label || r.comment.trim()));
+}
+
+async function uploadLegacyReviews(rows, sourceName='旧标注'){
+  if(!currentUser){
+    setAuthMessage('请先登录，再迁移旧标注。');
+    return;
+  }
+
+  if(!rows.length){
+    setAuthMessage(`${sourceName}里没有可迁移的标签或 comment。`);
+    return;
+  }
+
+  const payload = rows.map(r=>({
+    openalex_id:r.openalex_id,
+    user_id:currentUser.id,
+    reviewer_email:currentUser.email,
+    label:r.label || '',
+    comment:r.comment || '',
+    updated_at:r.updated_at || nowISO()
+  }));
+
+  setAuthMessage(`正在把 ${fmt(payload.length)} 条${sourceName}写入 Supabase…`);
+
+  try{
+    const chunkSize = 500;
+
+    for(let i=0;i<payload.length;i+=chunkSize){
+      const chunk = payload.slice(i, i+chunkSize);
+
+      const {error} = await db
+        .from('literature_reviews')
+        .upsert(chunk, {onConflict:'openalex_id,user_id'});
+
+      if(error) throw error;
+    }
+
+    await loadSharedReviews();
+    setAuthMessage(`迁移完成：${fmt(payload.length)} 条${sourceName}已经写入你的 Supabase 账号。旧本地数据没有删除。`);
+  }catch(e){
+    setAuthMessage('迁移失败：' + e.message);
+  }
+}
+
+async function migrateOldLocalStorage(){
+  try{
+    const raw = localStorage.getItem(OLD_REVIEW_STORAGE_KEY);
+
+    if(!raw){
+      setAuthMessage('这个 GitHub Pages 域名下没有找到旧版浏览器标注。若旧数据在本地 HTML/manual_reviews.json，请用“导入旧标注 JSON”。');
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+    const rows = normalizeLegacyReviews(parsed);
+    await uploadLegacyReviews(rows, '旧浏览器标注');
+  }catch(e){
+    setAuthMessage('读取旧浏览器标注失败：' + e.message);
+  }
+}
+
+async function importLegacyFile(file){
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const rows = normalizeLegacyReviews(parsed);
+    await uploadLegacyReviews(rows, '旧 JSON 标注');
+  }catch(e){
+    setAuthMessage('导入旧标注失败：' + e.message);
+  }finally{
+    $('importLegacyInput').value = '';
+  }
 }
 
 async function loadData(){
@@ -1494,6 +1671,13 @@ $('reloadBtn').addEventListener('click',loadData);
 $('exportBtn').addEventListener('click',exportCSV);
 $('exportReviewsBtn').addEventListener('click',exportReviews);
 $('refreshReviewsBtn').addEventListener('click',()=>loadSharedReviews(false));
+$('migrateLocalBtn').addEventListener('click',migrateOldLocalStorage);
+$('importLegacyBtn').addEventListener('click',()=>$('importLegacyInput').click());
+$('importLegacyInput').addEventListener('change',e=>{
+  const file=e.target.files?.[0];
+  if(file) importLegacyFile(file);
+});
+$('checkAuthBtn').addEventListener('click',()=>checkAuthStatus('MANUAL_CHECK'));
 $('loginBtn').addEventListener('click',sendMagicLink);
 $('signOutBtn').addEventListener('click',signOut);
 
@@ -1530,8 +1714,16 @@ $('nextBtn').addEventListener('click',()=>{
   }
 });
 
+window.addEventListener('focus',()=>checkAuthStatus('FOCUS_CHECK'));
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState === 'visible'){
+    checkAuthStatus('VISIBILITY_CHECK');
+  }
+});
+
 renderAuth();
-Promise.all([loadData(), initAuth()]);
+loadData();
+initAuth();
 </script>
 </body>
 </html>
