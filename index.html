@@ -1,25 +1,1174 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HardwareAnt</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 760px;
-      margin: 80px auto;
-      padding: 0 24px;
-      line-height: 1.6;
-      color: #1f2937;
-    }
-    h1 { font-size: 42px; margin-bottom: 8px; }
-    p { color: #6b7280; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HardwareAnt · AnthroTrends</title>
+<style>
+:root{
+  --bg:#f4f3ee;--panel:#ffffff;--ink:#171a17;--muted:#697069;--line:#d7d9d1;
+  --accent:#246353;--accent-soft:#dcebe6;--warm:#f3ead8;--danger:#a23f3f;
+  --shadow:0 8px 28px rgba(31,42,36,.07);--radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+  "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.5
+}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+a{color:inherit}
+.app{max-width:1720px;margin:0 auto;padding:24px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:18px}
+.brand h1{font-size:34px;line-height:1.05;margin:0 0 8px;letter-spacing:-.03em}
+.brand p{margin:0;color:var(--muted)}
+.source-box{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;
+  min-width:330px;max-width:620px;box-shadow:var(--shadow);font-size:13px
+}
+.source-box strong{display:block;margin-bottom:4px}
+.source-box span{color:var(--muted);word-break:break-all}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 12px}
+.btn{
+  border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 15px;
+  color:var(--ink);font-weight:650
+}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.status{
+  padding:11px 14px;border-radius:12px;border:1px solid #c8ddd6;background:#edf5f2;
+  color:#345c51;font-size:13px;margin-bottom:12px
+}
+.status.warn{background:#fff7ea;border-color:#ead0a9;color:#7b521e}
+.status.error{background:#fff0f0;border-color:#e6baba;color:#853838}
+.notice{
+  font-size:12px;color:var(--muted);padding:0 2px 16px
+}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start}
+.sidebar{position:sticky;top:16px;display:grid;gap:12px}
+.panel,.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.panel{padding:15px}
+.panel h2{font-size:16px;margin:0}
+.panel details{border-top:1px solid #ecece6;padding-top:10px;margin-top:10px}
+.panel summary{cursor:pointer;font-weight:700;font-size:13px}
+.field{margin-top:10px}
+.field label,.field-title{display:block;color:var(--muted);font-size:12px;margin:0 0 5px}
+.input,.select,.textarea{
+  width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;
+  padding:9px 10px;color:var(--ink)
+}
+.textarea{resize:vertical;min-height:66px}
+.range{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.check-grid{display:grid;gap:7px;margin-top:9px}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:13px}
+.check input{margin-top:3px}
+.reset-row{display:flex;gap:8px;margin-top:12px}
+.main{min-width:0}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:15px}
+.metric .label{text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-size:11px}
+.metric .value{font-size:30px;font-weight:760;margin:5px 0 1px}
+.metric .note{font-size:12px;color:var(--muted)}
+.dashboard-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-bottom:18px}
+.card{padding:16px}
+.span-6{grid-column:span 6}
+.card-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
+.card-title h3{font-size:16px;margin:0}
+.card-title .sub{font-size:12px;color:var(--muted)}
+.bar-list{display:grid;gap:8px}
+.bar-row{display:grid;grid-template-columns:minmax(110px,1.1fr) 2fr auto;gap:8px;align-items:center;font-size:12px}
+.bar-track{height:9px;background:#ecefe9;border-radius:999px;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:999px}
+.bar-value{font-variant-numeric:tabular-nums;color:var(--muted);min-width:62px;text-align:right}
+.chart-wrap{width:100%;overflow:hidden}
+.chart-wrap svg{display:block;width:100%;height:auto}
+.chart-empty{padding:26px 8px;text-align:center;color:var(--muted);font-size:13px}
+.list-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:22px 0 10px}
+.list-head h2{font-size:20px;margin:0}
+.list-note{font-size:13px;color:var(--muted)}
+.sort-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.article-list{display:grid;gap:12px}
+.article{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px}
+.article.core{border-left:5px solid #1f5a4b}
+.article.favorite{border-left:5px solid #ad843e}
+.article.irrelevant{opacity:.68}
+.article-top{display:grid;grid-template-columns:minmax(0,1fr) 245px;gap:16px;align-items:start}
+.article h3{font-size:18px;line-height:1.35;margin:0 0 5px}
+.article h3 a{text-decoration:none}
+.article h3 a:hover{text-decoration:underline}
+.title-zh{font-size:14px;color:#3f514a;margin:0 0 8px}
+.meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+.pills{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
+.pill{display:inline-flex;align-items:center;border-radius:999px;background:#ecefe9;padding:3px 8px;font-size:11px;font-weight:700}
+.pill.score-high{background:#dcefe8;color:#315b50}
+.pill.score-medium{background:#f3ead8;color:#785d2c}
+.pill.theme{background:#e8edf3;color:#435469}
+.pill.region{background:#eee8f2;color:#5c4967}
+.pill.flag{background:#f3dfdf;color:#7c4040}
+.pill.manual{background:#e5eee8;color:#315b50}
+.review-box{background:#f8f8f4;border:1px solid #e6e7df;border-radius:12px;padding:11px}
+.review-box .save-state{font-size:11px;color:var(--muted);margin-top:6px;min-height:16px}
+.keywords{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.kw{font-size:11px;border-radius:999px;background:#e8f1ed;padding:3px 8px;color:#315b50}
+.kw.zh{background:#f0ece3;color:#675c45}
+.details{margin-top:12px;border-top:1px solid #ecece6;padding-top:10px}
+.details summary{cursor:pointer;font-size:13px;font-weight:700}
+.abstract-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+.abstract-box h4{font-size:12px;color:var(--muted);margin:0 0 6px}
+.abstract{font-family:Georgia,"Times New Roman",serif;font-size:14px;color:#343934;white-space:pre-wrap}
+.raw{
+  font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;background:#151815;color:#dce6df;
+  border-radius:10px;padding:12px;overflow:auto;max-height:360px;white-space:pre-wrap
+}
+.pager{display:flex;justify-content:center;align-items:center;gap:9px;margin:18px 0 6px}
+.empty{padding:42px;text-align:center;color:var(--muted);background:#fff;border:1px dashed var(--line);border-radius:16px}
+.footer-note{color:var(--muted);font-size:12px;margin:14px 2px 4px}
+@media(max-width:1100px){
+  .layout{grid-template-columns:1fr}.sidebar{position:static}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .span-6{grid-column:span 12}
+}
+@media(max-width:720px){
+  .app{padding:14px}.header{flex-direction:column}.source-box{min-width:0;width:100%}
+  .metrics{grid-template-columns:1fr 1fr}.article-top{grid-template-columns:1fr}
+  .abstract-grid{grid-template-columns:1fr}.bar-row{grid-template-columns:1fr 1.4fr auto}
+}
+</style>
 </head>
 <body>
-  <h1>HardwareAnt</h1>
-  <p>AnthroTrends consumer hardware literature review.</p>
-  <p>如果你能在公网看到这一页，说明 GitHub Pages 已经部署成功。</p>
+<div class="app">
+  <header class="header">
+    <div class="brand">
+      <h1>HardwareAnt</h1>
+      <p>AnthroTrends · Consumer Hardware Literature Review</p>
+    </div>
+    <div class="source-box">
+      <strong id="sourceState">正在载入文献库…</strong>
+      <span>数据源：./data/relevant_literature.json</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button id="reloadBtn" class="btn primary">重新载入数据</button>
+    <button id="exportBtn" class="btn" disabled>导出当前筛选 CSV</button>
+    <button id="exportReviewsBtn" class="btn">备份人工标签 JSON</button>
+    <label class="btn" style="display:inline-flex;align-items:center;gap:8px">
+      导入人工标签
+      <input id="importReviewsInput" type="file" accept=".json,application/json" hidden>
+    </label>
+  </div>
+
+  <div id="status" class="status">正在从 GitHub Pages 读取 DeepSeek 筛选结果…</div>
+  <div class="notice">
+    当前版本的“核心收藏 / 收藏 / 无关 / comment”只保存在本浏览器 localStorage 中。下一步接入 Supabase 后会改成你和协作者共享。
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <h2>筛选</h2>
+
+        <div class="field">
+          <label for="relevanceFilter">DeepSeek 相关度</label>
+          <select id="relevanceFilter" class="select">
+            <option value="">High + Medium</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="journalFilter">期刊</label>
+          <select id="journalFilter" class="select"><option value="">全部期刊</option></select>
+        </div>
+
+        <div class="range">
+          <div class="field"><label for="yearFrom">起始年份</label><input id="yearFrom" class="input" type="number"></div>
+          <div class="field"><label for="yearTo">结束年份</label><input id="yearTo" class="input" type="number"></div>
+        </div>
+
+        <div class="field">
+          <label for="typeFilter">文献类型</label>
+          <select id="typeFilter" class="select"><option value="">全部类型</option></select>
+        </div>
+
+        <div class="field">
+          <label for="languageFilter">语言</label>
+          <select id="languageFilter" class="select"><option value="">全部语言</option></select>
+        </div>
+
+        <div class="field">
+          <label for="abstractFilter">摘要</label>
+          <select id="abstractFilter" class="select">
+            <option value="">不限</option>
+            <option value="yes">有摘要</option>
+            <option value="no">无摘要</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="manualFilter">人工标签</label>
+          <select id="manualFilter" class="select">
+            <option value="">全部</option>
+            <option value="unreviewed">未标注</option>
+            <option value="core">核心收藏</option>
+            <option value="favorite">收藏</option>
+            <option value="irrelevant">无关</option>
+          </select>
+        </div>
+
+        <details open>
+          <summary>对象标签</summary>
+          <div id="objectChecks" class="check-grid"></div>
+        </details>
+
+        <details>
+          <summary>研究主题</summary>
+          <div id="themeChecks" class="check-grid"></div>
+        </details>
+
+        <details>
+          <summary>区域</summary>
+          <div id="regionChecks" class="check-grid"></div>
+        </details>
+
+        <details>
+          <summary>排除 / 边界标签</summary>
+          <div id="flagFilters"></div>
+        </details>
+
+        <div class="reset-row">
+          <button id="resetBtn" class="btn" type="button">清空筛选</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="metrics">
+        <div class="metric">
+          <div class="label">Filtered literature</div>
+          <div id="metricTotal" class="value">0</div>
+          <div class="note">当前筛选文献数</div>
+        </div>
+        <div class="metric">
+          <div class="label">High relevance</div>
+          <div id="metricHigh" class="value">—</div>
+          <div class="note">当前结果中的 High 比例</div>
+        </div>
+        <div class="metric">
+          <div class="label">Reviewed</div>
+          <div id="metricReviewed" class="value">0</div>
+          <div class="note">已人工判断</div>
+        </div>
+        <div class="metric">
+          <div class="label">Core collection</div>
+          <div id="metricCore" class="value">0</div>
+          <div class="note">核心收藏</div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="card span-6">
+          <div class="card-title">
+            <div><h3>文献对象分布</h3><div class="sub">多标签，可重叠；百分比按当前筛选总数计算</div></div>
+          </div>
+          <div id="objectBars" class="bar-list"></div>
+        </div>
+
+        <div class="card span-6">
+          <div class="card-title">
+            <div><h3>主题分布</h3><div class="sub">DeepSeek themes，多标签可重叠</div></div>
+          </div>
+          <div id="themeBars" class="bar-list"></div>
+        </div>
+
+        <div class="card span-6">
+          <div class="card-title">
+            <div><h3>期刊来源</h3><div class="sub">当前筛选 Top 12</div></div>
+          </div>
+          <div id="journalBars" class="bar-list"></div>
+        </div>
+
+        <div class="card span-6">
+          <div class="card-title">
+            <div><h3>时间分布</h3><div class="sub">按 publication_year 统计</div></div>
+          </div>
+          <div id="yearChart" class="chart-wrap"></div>
+        </div>
+      </section>
+
+      <div class="list-head">
+        <div>
+          <h2>文献列表</h2>
+          <div id="listNote" class="list-note">正在载入数据</div>
+        </div>
+        <div class="sort-row">
+          <label class="field-title" for="sortFilter">排序</label>
+          <select id="sortFilter" class="select" style="width:auto">
+            <option value="relevance">相关度优先</option>
+            <option value="newest">最新发表</option>
+            <option value="oldest">最早发表</option>
+            <option value="cited">引用数</option>
+            <option value="review">人工标签</option>
+          </select>
+          <select id="pageSize" class="select" style="width:auto">
+            <option value="20">20 / 页</option>
+            <option value="40" selected>40 / 页</option>
+            <option value="80">80 / 页</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="articleList" class="article-list">
+        <div class="empty">正在载入文献库…</div>
+      </div>
+
+      <div class="pager">
+        <button id="prevBtn" class="btn" disabled>上一页</button>
+        <span id="pageInfo" class="list-note">0 / 0</span>
+        <button id="nextBtn" class="btn" disabled>下一页</button>
+      </div>
+
+      <div class="footer-note">
+        文献元数据来自 DeepSeek 打标后的 relevant_literature.json。人工复核目前只存在当前浏览器。
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+const DATA_URL = './data/relevant_literature.json';
+const REVIEW_STORAGE_KEY = 'hardwareant_manual_reviews_v1';
+const $ = id => document.getElementById(id);
+
+const OBJECTS = {
+  consumer_electronics:'消费电子',
+  supply_chain:'供应链',
+  manufacturing:'制造 / 装配',
+  raw_material_extraction:'原材料开采',
+  energy:'能源',
+  software:'软件 / 数字系统',
+  infrastructure:'基础设施'
+};
+
+const THEMES = {
+  labor_and_work:'劳动与工作',
+  design_and_innovation:'设计与创新',
+  maintenance_and_repair:'维护与维修',
+  political_economy:'政治经济',
+  standards_and_governance:'标准与治理',
+  consumption_and_use:'消费与使用',
+  environmental_dimensions:'环境维度',
+  trade_and_distribution:'贸易与流通'
+};
+
+const REGIONS = [
+  'China','Taiwan','East Asia Other','Southeast Asia','South Asia','Asia Other',
+  'Europe','North America','South America','Africa','Oceania',
+  'Global or Cross-regional','Unclear'
+];
+
+const FLAGS = {
+  is_archaeology:'考古学',
+  is_historical_research:'历史研究',
+  is_biological_anthropology:'生物人类学',
+  is_linguistic_anthropology:'语言人类学',
+  is_medical_or_health_research:'医疗 / 健康研究',
+  is_purely_digital_research:'纯数字研究',
+  is_book_review_or_editorial:'书评 / 编辑类'
+};
+
+const MANUAL = {
+  core:'核心收藏',
+  favorite:'收藏',
+  irrelevant:'无关'
+};
+
+const REVIEW_RANK = {core:0,favorite:1,'':2,irrelevant:3};
+
+let works = [];
+let filtered = [];
+let reviews = loadReviews();
+let page = 1;
+let saveTimer = null;
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+
+function fmt(n){
+  return new Intl.NumberFormat('en-US').format(Number(n)||0);
+}
+
+function pct(n,d){
+  return d ? (100*n/d).toFixed(1)+'%' : '0.0%';
+}
+
+function nowISO(){
+  return new Date().toISOString();
+}
+
+function authorNames(w){
+  if(Array.isArray(w.author_names) && w.author_names.length) return w.author_names;
+  if(Array.isArray(w.authors)) {
+    return w.authors.map(a => typeof a === 'string' ? a : a?.name).filter(Boolean);
+  }
+  return [];
+}
+
+function keywordNames(w){
+  if(Array.isArray(w.keyword_names) && w.keyword_names.length) return w.keyword_names;
+  if(Array.isArray(w.keywords)) {
+    return w.keywords.map(k => typeof k === 'string' ? k : k?.name).filter(Boolean);
+  }
+  return [];
+}
+
+function bestUrl(w){
+  return w.best_url || w.landing_page_url || w.doi_url || w.openalex_url || '';
+}
+
+function loadReviews(){
+  try{
+    const raw = localStorage.getItem(REVIEW_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  }catch{
+    return {};
+  }
+}
+
+function persistReviews(){
+  localStorage.setItem(REVIEW_STORAGE_KEY, JSON.stringify(reviews));
+}
+
+function reviewOf(w){
+  return reviews[String(w.openalex_id)] || {label:'',comment:''};
+}
+
+function setStatus(text, kind=''){
+  const el = $('status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' '+kind : '');
+}
+
+async function loadData(){
+  setStatus('正在从 GitHub Pages 读取文献库…');
+  $('sourceState').textContent = '正在载入文献库…';
+  $('reloadBtn').disabled = true;
+  $('exportBtn').disabled = true;
+
+  try{
+    const res = await fetch(DATA_URL, {cache:'no-store'});
+    if(!res.ok){
+      throw new Error(`HTTP ${res.status}：找不到 ${DATA_URL}`);
+    }
+
+    const parsed = await res.json();
+    if(!Array.isArray(parsed)){
+      throw new Error('relevant_literature.json 不是数组格式。');
+    }
+
+    works = parsed;
+    setupDynamicFilters();
+    page = 1;
+    applyFilters();
+
+    $('sourceState').textContent = `已载入 ${fmt(works.length)} 篇候选文献`;
+    $('reloadBtn').disabled = false;
+    $('exportBtn').disabled = false;
+    setStatus(`已载入 ${fmt(works.length)} 篇 DeepSeek high + medium 候选文献。`);
+  }catch(e){
+    $('sourceState').textContent = '文献库载入失败';
+    $('reloadBtn').disabled = false;
+    setStatus(
+      '载入失败：' + e.message +
+      '。请确认 GitHub 仓库中存在 data/relevant_literature.json，并已 push。',
+      'error'
+    );
+    $('articleList').innerHTML = '<div class="empty">无法读取文献库</div>';
+  }
+}
+
+function setupDynamicFilters(){
+  const journals = [...new Set(works.map(w=>w.journal_name).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  $('journalFilter').innerHTML =
+    '<option value="">全部期刊</option>' +
+    journals.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+
+  const types = [...new Set(works.map(w=>w.type).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  $('typeFilter').innerHTML =
+    '<option value="">全部类型</option>' +
+    types.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+
+  const langs = [...new Set(works.map(w=>w.language).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b));
+
+  $('languageFilter').innerHTML =
+    '<option value="">全部语言</option>' +
+    langs.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+
+  const years = works.map(w=>Number(w.publication_year)).filter(Number.isFinite);
+  const minY = years.length ? Math.min(...years) : 2000;
+  const maxY = years.length ? Math.max(...years) : new Date().getFullYear();
+
+  $('yearFrom').value = minY;
+  $('yearTo').value = maxY;
+  $('yearFrom').dataset.default = minY;
+  $('yearTo').dataset.default = maxY;
+
+  $('objectChecks').innerHTML = Object.entries(OBJECTS).map(([k,v])=>
+    `<label class="check"><input type="checkbox" data-object="${k}"><span>${esc(v)}</span></label>`
+  ).join('');
+
+  $('themeChecks').innerHTML = Object.entries(THEMES).map(([k,v])=>
+    `<label class="check"><input type="checkbox" data-theme="${k}"><span>${esc(v)}</span></label>`
+  ).join('');
+
+  $('regionChecks').innerHTML = REGIONS.map(v=>
+    `<label class="check"><input type="checkbox" data-region="${esc(v)}"><span>${esc(v)}</span></label>`
+  ).join('');
+
+  $('flagFilters').innerHTML = Object.entries(FLAGS).map(([k,v])=>`
+    <div class="field">
+      <label for="flag_${k}">${esc(v)}</label>
+      <select id="flag_${k}" class="select" data-flag="${k}">
+        <option value="">不限</option>
+        <option value="false">否</option>
+        <option value="true">是</option>
+      </select>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('[data-object],[data-theme],[data-region],[data-flag]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      page=1;
+      applyFilters();
+    });
+  });
+}
+
+function selected(attr){
+  return [...document.querySelectorAll(`[${attr}]:checked`)]
+    .map(el=>el.getAttribute(attr));
+}
+
+function applyFilters(){
+  const relevance = $('relevanceFilter').value;
+  const journal = $('journalFilter').value;
+  const from = Number($('yearFrom').value) || -Infinity;
+  const to = Number($('yearTo').value) || Infinity;
+  const type = $('typeFilter').value;
+  const language = $('languageFilter').value;
+  const abs = $('abstractFilter').value;
+  const manual = $('manualFilter').value;
+  const obj = selected('data-object');
+  const themes = selected('data-theme');
+  const regions = selected('data-region');
+
+  const flagRules = {};
+  document.querySelectorAll('[data-flag]').forEach(el=>{
+    if(el.value) flagRules[el.dataset.flag] = el.value === 'true';
+  });
+
+  filtered = works.filter(w=>{
+    if(relevance && w.relevance_score !== relevance) return false;
+    if(journal && w.journal_name !== journal) return false;
+
+    const y = Number(w.publication_year);
+    if(Number.isFinite(y) && (y < from || y > to)) return false;
+
+    if(type && w.type !== type) return false;
+    if(language && w.language !== language) return false;
+    if(abs === 'yes' && !w.abstract) return false;
+    if(abs === 'no' && !!w.abstract) return false;
+
+    const rv = reviewOf(w);
+    if(manual === 'unreviewed' && rv.label) return false;
+    if(manual && manual !== 'unreviewed' && rv.label !== manual) return false;
+
+    if(obj.some(k=>w[k] !== true)) return false;
+    if(themes.length && !themes.some(t=>(w.themes||[]).includes(t))) return false;
+    if(regions.length && !regions.some(r=>(w.regions||[]).includes(r))) return false;
+
+    for(const [k,v] of Object.entries(flagRules)){
+      if(Boolean(w[k]) !== v) return false;
+    }
+    return true;
+  });
+
+  sortFiltered();
+  renderAll();
+}
+
+function sortFiltered(){
+  const sort = $('sortFilter').value;
+
+  filtered.sort((a,b)=>{
+    if(sort === 'newest'){
+      return String(b.publication_date||'').localeCompare(String(a.publication_date||''));
+    }
+    if(sort === 'oldest'){
+      return String(a.publication_date||'').localeCompare(String(b.publication_date||''));
+    }
+    if(sort === 'cited'){
+      return (Number(b.cited_by_count)||0)-(Number(a.cited_by_count)||0);
+    }
+    if(sort === 'review'){
+      const ra = REVIEW_RANK[reviewOf(a).label || ''] ?? 9;
+      const rb = REVIEW_RANK[reviewOf(b).label || ''] ?? 9;
+      return ra-rb || String(b.publication_date||'').localeCompare(String(a.publication_date||''));
+    }
+
+    const score = {high:0,medium:1,low:2};
+    return (score[a.relevance_score]??9)-(score[b.relevance_score]??9)
+      || String(b.publication_date||'').localeCompare(String(a.publication_date||''));
+  });
+}
+
+function countBy(items, getter){
+  const m = new Map();
+
+  items.forEach(w=>{
+    const vals = getter(w);
+    (Array.isArray(vals)?vals:[vals])
+      .filter(Boolean)
+      .forEach(v=>m.set(v,(m.get(v)||0)+1));
+  });
+
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]);
+}
+
+function renderBars(el, rows, total, labels={}, limit=20){
+  const data = rows.slice(0,limit);
+
+  if(!data.length){
+    el.innerHTML='<div class="chart-empty">当前筛选没有数据</div>';
+    return;
+  }
+
+  const max = Math.max(...data.map(x=>x[1]),1);
+
+  el.innerHTML = data.map(([k,n])=>`
+    <div class="bar-row">
+      <div title="${esc(k)}">${esc(labels[k]||k)}</div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${(100*n/max).toFixed(2)}%"></div>
+      </div>
+      <div class="bar-value">${fmt(n)} · ${pct(n,total)}</div>
+    </div>
+  `).join('');
+}
+
+function renderYearChart(){
+  const el = $('yearChart');
+
+  const rows = countBy(filtered,w=>String(w.publication_year||''))
+    .filter(([y])=>/^\d{4}$/.test(y))
+    .sort((a,b)=>Number(a[0])-Number(b[0]));
+
+  if(!rows.length){
+    el.innerHTML='<div class="chart-empty">当前筛选没有年份数据</div>';
+    return;
+  }
+
+  const W=680,H=260,pad={l:42,r:16,t:18,b:36};
+  const max=Math.max(...rows.map(x=>x[1]),1);
+
+  const x = i => rows.length===1
+    ? (pad.l+(W-pad.r))/2
+    : pad.l+i*(W-pad.l-pad.r)/(rows.length-1);
+
+  const y = n => H-pad.b - n*(H-pad.t-pad.b)/max;
+
+  const pts = rows.map(([,n],i)=>`${x(i)},${y(n)}`).join(' ');
+  const yTicks=[0,.25,.5,.75,1].map(t=>Math.round(max*t));
+  const step=Math.max(1,Math.ceil(rows.length/8));
+
+  const xLabels=rows.map(([yr],i)=>
+    i%step===0||i===rows.length-1
+      ? `<text x="${x(i)}" y="${H-12}" text-anchor="middle" font-size="10" fill="#697069">${yr}</text>`
+      : ''
+  ).join('');
+
+  const grid=yTicks.map(n=>`
+    <g>
+      <line x1="${pad.l}" x2="${W-pad.r}" y1="${y(n)}" y2="${y(n)}" stroke="#e3e5de"/>
+      <text x="${pad.l-8}" y="${y(n)+3}" text-anchor="end" font-size="10" fill="#697069">${n}</text>
+    </g>
+  `).join('');
+
+  el.innerHTML=`
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="当前筛选文献按年份分布">
+      ${grid}
+      <polyline points="${pts}" fill="none" stroke="#246353" stroke-width="2.5"
+        stroke-linejoin="round" stroke-linecap="round"/>
+      ${rows.map(([,n],i)=>
+        `<circle cx="${x(i)}" cy="${y(n)}" r="3" fill="#246353">
+          <title>${rows[i][0]}: ${n}</title>
+        </circle>`
+      ).join('')}
+      ${xLabels}
+    </svg>
+  `;
+}
+
+function renderDashboard(){
+  const total = filtered.length;
+  const high = filtered.filter(w=>w.relevance_score==='high').length;
+  const reviewed = filtered.filter(w=>!!reviewOf(w).label).length;
+  const core = filtered.filter(w=>reviewOf(w).label==='core').length;
+
+  $('metricTotal').textContent=fmt(total);
+  $('metricHigh').textContent=pct(high,total);
+  $('metricReviewed').textContent=fmt(reviewed);
+  $('metricCore').textContent=fmt(core);
+
+  const objRows = Object.keys(OBJECTS)
+    .map(k=>[k,filtered.filter(w=>w[k]===true).length])
+    .sort((a,b)=>b[1]-a[1]);
+
+  renderBars($('objectBars'),objRows,total,OBJECTS,20);
+  renderBars($('themeBars'),countBy(filtered,w=>w.themes||[]),total,THEMES,20);
+  renderBars($('journalBars'),countBy(filtered,w=>w.journal_name||'Unknown'),total,{},12);
+  renderYearChart();
+}
+
+function labelPills(w){
+  const parts=[];
+
+  parts.push(
+    `<span class="pill score-${esc(w.relevance_score)}">${esc(String(w.relevance_score||'').toUpperCase())}</span>`
+  );
+
+  Object.entries(OBJECTS).forEach(([k,v])=>{
+    if(w[k]===true) parts.push(`<span class="pill">${esc(v)}</span>`);
+  });
+
+  (w.themes||[]).forEach(t=>
+    parts.push(`<span class="pill theme">${esc(THEMES[t]||t)}</span>`)
+  );
+
+  (w.regions||[]).forEach(r=>
+    parts.push(`<span class="pill region">${esc(r)}</span>`)
+  );
+
+  Object.entries(FLAGS).forEach(([k,v])=>{
+    if(w[k]===true) parts.push(`<span class="pill flag">${esc(v)}</span>`);
+  });
+
+  const rv=reviewOf(w);
+  if(rv.label){
+    parts.push(`<span class="pill manual">${esc(MANUAL[rv.label]||rv.label)}</span>`);
+  }
+
+  return parts.join('');
+}
+
+function rawRecord(w){
+  return JSON.stringify({...w,manual_review:reviewOf(w)},null,2);
+}
+
+function renderArticles(){
+  const size=Number($('pageSize').value)||40;
+  const pages=Math.max(1,Math.ceil(filtered.length/size));
+  page=Math.max(1,Math.min(page,pages));
+
+  const slice=filtered.slice((page-1)*size,page*size);
+
+  $('listNote').textContent=
+    `${fmt(filtered.length)} 条结果 · 候选库 ${fmt(works.length)} 篇`;
+
+  $('pageInfo').textContent=filtered.length?`${page} / ${pages}`:'0 / 0';
+  $('prevBtn').disabled=page<=1||!filtered.length;
+  $('nextBtn').disabled=page>=pages||!filtered.length;
+
+  if(!slice.length){
+    $('articleList').innerHTML=
+      '<div class="empty">没有符合当前筛选条件的文献</div>';
+    return;
+  }
+
+  $('articleList').innerHTML=slice.map(w=>{
+    const id=String(w.openalex_id);
+    const rv=reviewOf(w);
+    const url=bestUrl(w);
+    const title=esc(w.title||'(Untitled)');
+    const titleHtml=url
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener">${title}</a>`
+      : title;
+
+    const authors=authorNames(w).join('; ')||'Unknown author';
+    const kws=keywordNames(w);
+    const kwsZh=Array.isArray(w.keywords_zh)?w.keywords_zh:[];
+
+    return `
+      <article class="article ${esc(rv.label||'')}" data-id="${esc(id)}">
+        <div class="article-top">
+          <div>
+            <h3>${titleHtml}</h3>
+
+            ${w.title_zh
+              ? `<div class="title-zh">${esc(w.title_zh)}</div>`
+              : ''
+            }
+
+            <div class="meta">
+              ${esc(w.journal_name||'Unknown journal')}
+              ${w.journal_quartile?` · ${esc(w.journal_quartile)}`:''}
+              ${w.journal_jif!==null && w.journal_jif!==undefined && w.journal_jif!==''
+                ? ` · JIF ${esc(w.journal_jif)}`
+                : ''
+              }
+              · ${esc(authors)}
+              · ${esc(w.publication_date||String(w.publication_year||'Unknown date'))}
+              ${w.type?` · ${esc(w.type)}`:''}
+              ${w.language?` · ${esc(w.language)}`:''}
+              · Cited ${fmt(w.cited_by_count||0)}
+            </div>
+
+            <div class="pills">${labelPills(w)}</div>
+
+            <div class="keywords">
+              ${kws.map(k=>`<span class="kw">${esc(k)}</span>`).join('')
+                || '<span class="meta">No OpenAlex keywords</span>'
+              }
+              ${kwsZh.map(k=>`<span class="kw zh">${esc(k)}</span>`).join('')}
+            </div>
+          </div>
+
+          <div class="review-box">
+            <div class="field-title">人工标签</div>
+
+            <select class="select review-label" data-id="${esc(id)}">
+              <option value="" ${!rv.label?'selected':''}>未标注</option>
+              <option value="core" ${rv.label==='core'?'selected':''}>核心收藏</option>
+              <option value="favorite" ${rv.label==='favorite'?'selected':''}>收藏</option>
+              <option value="irrelevant" ${rv.label==='irrelevant'?'selected':''}>无关</option>
+            </select>
+
+            <div class="field" style="margin-top:8px">
+              <label>Comment</label>
+              <textarea
+                class="textarea review-comment"
+                data-id="${esc(id)}"
+                placeholder="写下为什么值得读、与哪个论题相关、后续怎么用……"
+              >${esc(rv.comment||'')}</textarea>
+            </div>
+
+            <div class="save-state" data-save-id="${esc(id)}">
+              ${rv.updated_at
+                ? '本地保存：'+esc(new Date(rv.updated_at).toLocaleString())
+                : ''
+              }
+            </div>
+          </div>
+        </div>
+
+        <details class="details">
+          <summary>摘要与完整信息</summary>
+
+          <div class="abstract-grid">
+            <div class="abstract-box">
+              <h4>Original abstract</h4>
+              <div class="abstract">
+                ${w.abstract
+                  ? esc(w.abstract)
+                  : '<span class="meta">No abstract in OpenAlex</span>'
+                }
+              </div>
+            </div>
+
+            <div class="abstract-box">
+              <h4>中文摘要</h4>
+              <div class="abstract">
+                ${w.abstract_zh
+                  ? esc(w.abstract_zh)
+                  : '<span class="meta">无中文摘要</span>'
+                }
+              </div>
+            </div>
+          </div>
+
+          <details class="details">
+            <summary>全部原始字段</summary>
+            <pre class="raw">${esc(rawRecord(w))}</pre>
+          </details>
+        </details>
+      </article>
+    `;
+  }).join('');
+
+  document.querySelectorAll('.review-label').forEach(el=>{
+    el.addEventListener('change',e=>{
+      const id=e.target.dataset.id;
+      updateReview(id,{label:e.target.value});
+
+      const article=e.target.closest('.article');
+      article.classList.remove('core','favorite','irrelevant');
+      if(e.target.value) article.classList.add(e.target.value);
+
+      scheduleSave(id);
+      renderDashboard();
+
+      if($('manualFilter').value || $('sortFilter').value==='review'){
+        applyFilters();
+      }
+    });
+  });
+
+  document.querySelectorAll('.review-comment').forEach(el=>{
+    el.addEventListener('input',e=>{
+      const id=e.target.dataset.id;
+      updateReview(id,{comment:e.target.value});
+      scheduleSave(id);
+    });
+
+    el.addEventListener('blur',()=>{
+      persistReviews();
+    });
+  });
+}
+
+function updateReview(id, patch){
+  const current=reviews[id]||{label:'',comment:''};
+
+  reviews[id]={
+    ...current,
+    ...patch,
+    updated_at:nowISO()
+  };
+
+  if(!reviews[id].label && !String(reviews[id].comment||'').trim()){
+    delete reviews[id];
+  }
+}
+
+function scheduleSave(id){
+  clearTimeout(saveTimer);
+
+  const state=document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
+  if(state) state.textContent='保存中…';
+
+  saveTimer=setTimeout(()=>{
+    persistReviews();
+
+    const target=document.querySelector(`[data-save-id="${CSS.escape(id)}"]`);
+    if(target){
+      target.textContent='已保存到本浏览器 · '+new Date().toLocaleTimeString();
+    }
+  },500);
+}
+
+function renderAll(){
+  renderDashboard();
+  renderArticles();
+}
+
+function resetFilters(){
+  $('relevanceFilter').value='';
+  $('journalFilter').value='';
+  $('yearFrom').value=$('yearFrom').dataset.default||'';
+  $('yearTo').value=$('yearTo').dataset.default||'';
+  $('typeFilter').value='';
+  $('languageFilter').value='';
+  $('abstractFilter').value='';
+  $('manualFilter').value='';
+
+  document.querySelectorAll('[data-object],[data-theme],[data-region]')
+    .forEach(el=>el.checked=false);
+
+  document.querySelectorAll('[data-flag]')
+    .forEach(el=>el.value='');
+
+  page=1;
+  applyFilters();
+}
+
+function csvCell(v){
+  const s=String(v??'');
+  return /[",\n]/.test(s)
+    ? '"'+s.replace(/"/g,'""')+'"'
+    : s;
+}
+
+function downloadBlob(text, filename, mime){
+  const blob=new Blob([text],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(){
+  if(!filtered.length) return;
+
+  const header=[
+    'manual_label','manual_comment','openalex_id','best_url','doi','title','title_zh',
+    'authors','journal_name','journal_quartile','journal_jif','publication_date',
+    'publication_year','type','language','cited_by_count','keywords','keywords_zh',
+    'abstract','abstract_zh','relevance_score',
+    ...Object.keys(OBJECTS),
+    'themes','regions',
+    ...Object.keys(FLAGS)
+  ];
+
+  const rows=[header];
+
+  filtered.forEach(w=>{
+    const rv=reviewOf(w);
+
+    rows.push([
+      MANUAL[rv.label]||'',
+      rv.comment||'',
+      w.openalex_id,
+      bestUrl(w),
+      w.doi,
+      w.title,
+      w.title_zh,
+      authorNames(w).join('; '),
+      w.journal_name,
+      w.journal_quartile,
+      w.journal_jif,
+      w.publication_date,
+      w.publication_year,
+      w.type,
+      w.language,
+      w.cited_by_count,
+      keywordNames(w).join('; '),
+      (w.keywords_zh||[]).join('; '),
+      w.abstract,
+      w.abstract_zh,
+      w.relevance_score,
+      ...Object.keys(OBJECTS).map(k=>w[k]===true?'TRUE':'FALSE'),
+      (w.themes||[]).join('; '),
+      (w.regions||[]).join('; '),
+      ...Object.keys(FLAGS).map(k=>w[k]===true?'TRUE':'FALSE')
+    ]);
+  });
+
+  const text='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\n');
+  const stamp=new Date().toISOString().slice(0,10);
+
+  downloadBlob(
+    text,
+    `hardware_review_filtered_${stamp}.csv`,
+    'text/csv;charset=utf-8'
+  );
+}
+
+function exportReviews(){
+  const payload={
+    version:1,
+    exported_at:nowISO(),
+    source:'HardwareAnt GitHub Pages',
+    labels:MANUAL,
+    reviews
+  };
+
+  const stamp=new Date().toISOString().slice(0,10);
+
+  downloadBlob(
+    JSON.stringify(payload,null,2),
+    `hardwareant_manual_reviews_${stamp}.json`,
+    'application/json;charset=utf-8'
+  );
+}
+
+async function importReviews(file){
+  try{
+    const text=await file.text();
+    const parsed=JSON.parse(text);
+    const incoming=parsed?.reviews && typeof parsed.reviews==='object'
+      ? parsed.reviews
+      : parsed;
+
+    if(!incoming || typeof incoming!=='object' || Array.isArray(incoming)){
+      throw new Error('JSON 格式不正确');
+    }
+
+    reviews={...reviews,...incoming};
+    persistReviews();
+    page=1;
+    applyFilters();
+    setStatus(`已导入人工标签，共有 ${fmt(Object.keys(reviews).length)} 条本地人工记录。`);
+  }catch(e){
+    setStatus('人工标签导入失败：'+e.message,'error');
+  }finally{
+    $('importReviewsInput').value='';
+  }
+}
+
+[
+  'relevanceFilter','journalFilter','yearFrom','yearTo',
+  'typeFilter','languageFilter','abstractFilter','manualFilter'
+].forEach(id=>{
+  $(id).addEventListener('change',()=>{
+    page=1;
+    applyFilters();
+  });
+});
+
+$('sortFilter').addEventListener('change',()=>{
+  page=1;
+  sortFiltered();
+  renderArticles();
+});
+
+$('pageSize').addEventListener('change',()=>{
+  page=1;
+  renderArticles();
+});
+
+$('reloadBtn').addEventListener('click',loadData);
+$('exportBtn').addEventListener('click',exportCSV);
+$('exportReviewsBtn').addEventListener('click',exportReviews);
+
+$('importReviewsInput').addEventListener('change',e=>{
+  const file=e.target.files?.[0];
+  if(file) importReviews(file);
+});
+
+$('resetBtn').addEventListener('click',resetFilters);
+
+$('prevBtn').addEventListener('click',()=>{
+  if(page>1){
+    page--;
+    renderArticles();
+    window.scrollTo({
+      top:$('articleList').offsetTop-20,
+      behavior:'smooth'
+    });
+  }
+});
+
+$('nextBtn').addEventListener('click',()=>{
+  const size=Number($('pageSize').value)||40;
+  const pages=Math.ceil(filtered.length/size);
+
+  if(page<pages){
+    page++;
+    renderArticles();
+    window.scrollTo({
+      top:$('articleList').offsetTop-20,
+      behavior:'smooth'
+    });
+  }
+});
+
+loadData();
+</script>
 </body>
 </html>
