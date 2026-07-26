@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HardwareAnt · AnthroTrends Collaborative Review</title>
+<title>HardwareAnt · Collaborative Literature Review</title>
 <style>
 :root{
   --bg:#f4f3ee;--panel:#ffffff;--ink:#171a17;--muted:#697069;--line:#d7d9d1;
@@ -154,6 +154,13 @@ a{color:inherit}
 .login-required{font-size:12px;color:var(--muted);padding:4px 0}
 .sync-dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:#86a89d;margin-right:6px}
 
+
+.password-setup{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding-top:8px;margin-top:8px;border-top:1px solid var(--line)
+}
+.password-setup .input{width:260px;max-width:70vw}
+
 </style>
 </head>
 <body>
@@ -171,10 +178,11 @@ a{color:inherit}
 
   <div class="authbar">
     <div id="loggedOutBox" class="auth-left">
-      <input id="loginEmail" class="input" type="email" placeholder="你的 Supabase 登录邮箱">
-      <button id="loginBtn" class="btn primary" type="button">发送登录链接</button>
+      <input id="loginEmail" class="input" type="email" autocomplete="username" placeholder="邮箱">
+      <input id="loginPassword" class="input" type="password" autocomplete="current-password" placeholder="密码">
+      <button id="loginBtn" class="btn primary" type="button">登录</button>
+      <button id="forgotPasswordBtn" class="btn" type="button">首次设置 / 忘记密码</button>
       <button id="checkAuthBtn" class="btn" type="button">检查登录状态</button>
-      <span class="auth-user">只有 Supabase 中已存在的用户可以登录。</span>
     </div>
 
     <div id="loggedInBox" class="auth-left" style="display:none">
@@ -189,6 +197,17 @@ a{color:inherit}
     <div id="authMessage" class="auth-user"></div>
   </div>
 
+  <div id="passwordRecoveryBox" class="authbar" style="display:none">
+    <div class="auth-left password-setup">
+      <span class="auth-user"><strong>设置新密码</strong></span>
+      <input id="newPassword" class="input" type="password" autocomplete="new-password" placeholder="输入新密码">
+      <input id="newPasswordConfirm" class="input" type="password" autocomplete="new-password" placeholder="再输入一次">
+      <button id="saveNewPasswordBtn" class="btn primary" type="button">保存新密码</button>
+      <button id="cancelPasswordBtn" class="btn" type="button">取消</button>
+    </div>
+  </div>
+
+
   <div class="toolbar">
     <button id="reloadBtn" class="btn primary">重新载入文献库</button>
     <button id="exportBtn" class="btn" disabled>导出当前筛选 CSV</button>
@@ -197,7 +216,7 @@ a{color:inherit}
 
   <div id="status" class="status">正在从 GitHub Pages 读取 DeepSeek 筛选结果…</div>
   <div class="notice">
-    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。每个人有自己独立的判断，同时可以看到协作者的判断。登录后约每 30 秒自动同步一次。旧版 localStorage 或 manual_reviews.json 可以一键迁移。
+    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。日常登录使用邮箱 + 密码，不再发送 密码邮件。只有第一次设置密码或忘记密码时才需要邮件。旧版 localStorage 或 manual_reviews.json 可以一键迁移。
   </div>
 
   <div class="layout">
@@ -516,33 +535,101 @@ function renderAuth(){
   }
 }
 
-async function sendMagicLink(){
+async function signInWithPassword(){
   const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
 
-  if(!email){
-    setAuthMessage('先输入邮箱。');
+  if(!email || !password){
+    setAuthMessage('请输入邮箱和密码。');
     return;
   }
 
   $('loginBtn').disabled = true;
-  setAuthMessage('正在发送登录邮件…');
+  setAuthMessage('正在登录…');
 
   try{
-    const {error} = await db.auth.signInWithOtp({
+    const {data, error} = await db.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: APP_URL,
-        shouldCreateUser: false
-      }
+      password
     });
 
     if(error) throw error;
 
-    setAuthMessage('登录邮件已发送。点邮件里的链接后，新页面应直接显示“已登录”；原标签页重新获得焦点时也会自动检查登录状态。');
+    if(data?.session){
+      await handleSession(data.session, 'PASSWORD_SIGN_IN');
+    }
+  }catch(e){
+    setAuthMessage('登录失败：' + e.message);
+  }finally{
+    $('loginBtn').disabled = false;
+  }
+}
+
+async function requestPasswordReset(){
+  const email = $('loginEmail').value.trim();
+
+  if(!email){
+    setAuthMessage('先输入邮箱，再点“首次设置 / 忘记密码”。');
+    return;
+  }
+
+  $('forgotPasswordBtn').disabled = true;
+  setAuthMessage('正在发送设置密码邮件…');
+
+  try{
+    const {error} = await db.auth.resetPasswordForEmail(email, {
+      redirectTo: APP_URL
+    });
+
+    if(error) throw error;
+
+    setAuthMessage('邮件已发送。点邮件里的链接回到 HardwareAnt 后，会出现“设置新密码”。这一步只在首次设置或忘记密码时需要。');
   }catch(e){
     setAuthMessage('发送失败：' + e.message);
   }finally{
-    $('loginBtn').disabled = false;
+    $('forgotPasswordBtn').disabled = false;
+  }
+}
+
+function showPasswordRecovery(){
+  $('passwordRecoveryBox').style.display = 'flex';
+  setAuthMessage('请输入你以后日常登录要使用的新密码。');
+  setTimeout(()=>$('newPassword').focus(), 50);
+}
+
+function hidePasswordRecovery(){
+  $('passwordRecoveryBox').style.display = 'none';
+  $('newPassword').value = '';
+  $('newPasswordConfirm').value = '';
+}
+
+async function saveNewPassword(){
+  const password = $('newPassword').value;
+  const confirm = $('newPasswordConfirm').value;
+
+  if(password.length < 8){
+    setAuthMessage('密码至少用 8 个字符。');
+    return;
+  }
+
+  if(password !== confirm){
+    setAuthMessage('两次输入的密码不一致。');
+    return;
+  }
+
+  $('saveNewPasswordBtn').disabled = true;
+  setAuthMessage('正在保存新密码…');
+
+  try{
+    const {error} = await db.auth.updateUser({password});
+    if(error) throw error;
+
+    hidePasswordRecovery();
+    setAuthMessage('密码已设置成功。以后直接用邮箱 + 密码登录，不需要再收邮件。');
+  }catch(e){
+    setAuthMessage('设置密码失败：' + e.message);
+  }finally{
+    $('saveNewPasswordBtn').disabled = false;
   }
 }
 
@@ -571,6 +658,7 @@ function cleanAuthUrl(){
 }
 
 async function handleSession(session, event=''){
+  if(event === 'PASSWORD_RECOVERY') showPasswordRecovery();
   const oldUserId = currentUser?.id || null;
   const newUser = session?.user || null;
   const newUserId = newUser?.id || null;
@@ -598,7 +686,7 @@ async function handleSession(session, event=''){
 
     const callbackError = authCallbackError();
     if(callbackError){
-      setAuthMessage('登录回调失败：' + callbackError);
+      setAuthMessage('认证回调失败：' + callbackError);
     }else{
       setAuthMessage('未登录时可以浏览文献，但不能编辑人工标签。');
     }
@@ -1678,11 +1766,20 @@ $('importLegacyInput').addEventListener('change',e=>{
   if(file) importLegacyFile(file);
 });
 $('checkAuthBtn').addEventListener('click',()=>checkAuthStatus('MANUAL_CHECK'));
-$('loginBtn').addEventListener('click',sendMagicLink);
+$('loginBtn').addEventListener('click',signInWithPassword);
+$('forgotPasswordBtn').addEventListener('click',requestPasswordReset);
+$('saveNewPasswordBtn').addEventListener('click',saveNewPassword);
+$('cancelPasswordBtn').addEventListener('click',hidePasswordRecovery);
 $('signOutBtn').addEventListener('click',signOut);
 
 $('loginEmail').addEventListener('keydown',e=>{
-  if(e.key === 'Enter') sendMagicLink();
+  if(e.key === 'Enter') $('loginPassword').focus();
+});
+$('loginPassword').addEventListener('keydown',e=>{
+  if(e.key === 'Enter') signInWithPassword();
+});
+$('newPasswordConfirm').addEventListener('keydown',e=>{
+  if(e.key === 'Enter') saveNewPassword();
 });
 
 $('resetBtn').addEventListener('click',resetFilters);
