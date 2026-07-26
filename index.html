@@ -369,7 +369,7 @@ a{color:inherit}
       </div>
 
       <div class="footer-note">
-        文献元数据来自 DeepSeek 打标后的 relevant_literature.json；人工复核保存在 Supabase。
+        文献元数据来自 DeepSeek 打标后的 relevant_literature.json；人工复核保存在 Supabase。 · build 2026-07-26b
       </div>
     </main>
   </div>
@@ -1679,7 +1679,6 @@ $('importLegacyInput').addEventListener('change',e=>{
   const file=e.target.files?.[0];
   if(file) importLegacyFile(file);
 });
-$('checkAuthBtn').addEventListener('click',()=>checkAuthStatus('MANUAL_CHECK'));
 $('loginBtn').addEventListener('click',signInWithPassword);
 $('signOutBtn').addEventListener('click',signOut);
 
