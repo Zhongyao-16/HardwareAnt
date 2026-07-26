@@ -199,10 +199,12 @@ a{color:inherit}
 
   <div id="passwordRecoveryBox" class="authbar" style="display:none">
     <div class="auth-left password-setup">
-      <span class="auth-user"><strong>设置新密码</strong></span>
+      <span class="auth-user"><strong>设置 / 重置密码</strong></span>
+      <input id="recoveryCode" class="input" type="text" inputmode="numeric"
+        autocomplete="one-time-code" maxlength="6" placeholder="邮件中的 6 位验证码">
       <input id="newPassword" class="input" type="password" autocomplete="new-password" placeholder="输入新密码">
       <input id="newPasswordConfirm" class="input" type="password" autocomplete="new-password" placeholder="再输入一次">
-      <button id="saveNewPasswordBtn" class="btn primary" type="button">保存新密码</button>
+      <button id="saveNewPasswordBtn" class="btn primary" type="button">验证并保存密码</button>
       <button id="cancelPasswordBtn" class="btn" type="button">取消</button>
     </div>
   </div>
@@ -216,7 +218,7 @@ a{color:inherit}
 
   <div id="status" class="status">正在从 GitHub Pages 读取 DeepSeek 筛选结果…</div>
   <div class="notice">
-    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。日常登录使用邮箱 + 密码，不再发送 密码邮件。只有第一次设置密码或忘记密码时才需要邮件。旧版 localStorage 或 manual_reviews.json 可以一键迁移。
+    文献主库来自 GitHub Pages；人工标签与 comment 保存到 Supabase。日常登录使用邮箱 + 密码，不再发送 密码邮件。第一次设置密码或忘记密码时只发送 6 位验证码，不再依赖一次性点击链接。旧版 localStorage 或 manual_reviews.json 可以一键迁移。
   </div>
 
   <div class="layout">
@@ -574,16 +576,14 @@ async function requestPasswordReset(){
   }
 
   $('forgotPasswordBtn').disabled = true;
-  setAuthMessage('正在发送设置密码邮件…');
+  setAuthMessage('正在发送 6 位验证码…');
 
   try{
-    const {error} = await db.auth.resetPasswordForEmail(email, {
-      redirectTo: APP_URL
-    });
-
+    const {error} = await db.auth.resetPasswordForEmail(email);
     if(error) throw error;
 
-    setAuthMessage('邮件已发送。点邮件里的链接回到 HardwareAnt 后，会出现“设置新密码”。这一步只在首次设置或忘记密码时需要。');
+    showPasswordRecovery();
+    setAuthMessage('验证码邮件已发送。不要点邮件里的任何链接，直接把 6 位数字填到这里。');
   }catch(e){
     setAuthMessage('发送失败：' + e.message);
   }finally{
@@ -593,19 +593,31 @@ async function requestPasswordReset(){
 
 function showPasswordRecovery(){
   $('passwordRecoveryBox').style.display = 'flex';
-  setAuthMessage('请输入你以后日常登录要使用的新密码。');
-  setTimeout(()=>$('newPassword').focus(), 50);
+  setTimeout(()=>$('recoveryCode').focus(), 50);
 }
 
 function hidePasswordRecovery(){
   $('passwordRecoveryBox').style.display = 'none';
+  $('recoveryCode').value = '';
   $('newPassword').value = '';
   $('newPasswordConfirm').value = '';
 }
 
 async function saveNewPassword(){
+  const email = $('loginEmail').value.trim();
+  const token = $('recoveryCode').value.trim();
   const password = $('newPassword').value;
   const confirm = $('newPasswordConfirm').value;
+
+  if(!email){
+    setAuthMessage('邮箱为空，请先在登录框输入邮箱。');
+    return;
+  }
+
+  if(!/^\d{6}$/.test(token)){
+    setAuthMessage('请输入邮件里的 6 位数字验证码。');
+    return;
+  }
 
   if(password.length < 8){
     setAuthMessage('密码至少用 8 个字符。');
@@ -618,16 +630,29 @@ async function saveNewPassword(){
   }
 
   $('saveNewPasswordBtn').disabled = true;
-  setAuthMessage('正在保存新密码…');
+  setAuthMessage('正在验证验证码…');
 
   try{
-    const {error} = await db.auth.updateUser({password});
+    const {data, error} = await db.auth.verifyOtp({
+      email,
+      token,
+      type:'recovery'
+    });
+
     if(error) throw error;
+    if(!data?.session) throw new Error('验证码通过，但没有建立登录 session。');
+
+    currentUser = data.user || data.session.user;
+    setAuthMessage('验证码正确，正在设置密码…');
+
+    const {error:updateError} = await db.auth.updateUser({password});
+    if(updateError) throw updateError;
 
     hidePasswordRecovery();
-    setAuthMessage('密码已设置成功。以后直接用邮箱 + 密码登录，不需要再收邮件。');
+    await handleSession(data.session, 'PASSWORD_SET_BY_OTP');
+    setAuthMessage('密码设置成功。以后直接用邮箱 + 密码登录，不需要再收邮件。');
   }catch(e){
-    setAuthMessage('设置密码失败：' + e.message);
+    setAuthMessage('验证或设置密码失败：' + e.message);
   }finally{
     $('saveNewPasswordBtn').disabled = false;
   }
@@ -658,7 +683,6 @@ function cleanAuthUrl(){
 }
 
 async function handleSession(session, event=''){
-  if(event === 'PASSWORD_RECOVERY') showPasswordRecovery();
   const oldUserId = currentUser?.id || null;
   const newUser = session?.user || null;
   const newUserId = newUser?.id || null;
@@ -1777,6 +1801,9 @@ $('loginEmail').addEventListener('keydown',e=>{
 });
 $('loginPassword').addEventListener('keydown',e=>{
   if(e.key === 'Enter') signInWithPassword();
+});
+$('recoveryCode').addEventListener('keydown',e=>{
+  if(e.key === 'Enter') $('newPassword').focus();
 });
 $('newPasswordConfirm').addEventListener('keydown',e=>{
   if(e.key === 'Enter') saveNewPassword();
